@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TurnScope & AudioCritic - Spatial Acoustic Radar Studio</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .radar-grid {
+      background-size: 28px 28px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    }
+    .glow-teal {
+      box-shadow: 0 0 20px rgba(45, 212, 191, 0.35);
+    }
+    .glow-orange {
+      box-shadow: 0 0 20px rgba(249, 115, 22, 0.35);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.35);
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-[#0b0f14] text-slate-100 antialiased min-h-screen p-4 flex flex-col items-center justify-start">
+
+  <!-- Top Container -->
+  <div class="w-full max-w-[1400px] flex flex-col gap-4">
+
+    <!-- Top Status Banner -->
+    <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">TurnScope &middot; Spatial Audio Critic Interactive Studio</span>
+      </div>
+      <div class="flex items-center gap-2 text-xs font-medium text-slate-300 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
+        <svg class="w-3.5 h-3.5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+        <span>Best heard on headphones</span>
+      </div>
+    </div>
+
+    <!-- Mode Selector & Scene Tabs -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <!-- Toggle: World Model (Original) vs Audio Critic (Spatial) -->
+      <div class="inline-flex p-1 bg-[#131922] border border-slate-800 rounded-2xl w-full sm:w-auto shadow-inner">
+        <button id="btn-orig" onclick="setAcousticMode('original')" class="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-0.5">
+          <span class="text-[10px] text-orange-400/90 font-bold tracking-widest">WORLD MODEL</span>
+          <span class="text-sm font-medium tracking-normal capitalize text-slate-300">Original sound</span>
+        </button>
+        <button id="btn-spatial" onclick="setAcousticMode('spatial')" class="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 bg-[#1a262f] border border-teal-500/50 text-teal-300 shadow-md flex flex-col items-center gap-0.5">
+          <span class="text-[10px] text-teal-400 font-bold tracking-widest">AUDIO CRITIC</span>
+          <span class="text-sm font-semibold tracking-normal capitalize text-white">Spatial sound</span>
+        </button>
+      </div>
+
+      <!-- Scene Tabs -->
+      <div class="flex items-center gap-2 bg-[#131922] p-1 rounded-xl border border-slate-800 text-xs font-medium">
+        <button onclick="switchScene(1)" id="scene-1-tab" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition">Scene 1</button>
+        <button onclick="switchScene(2)" id="scene-2-tab" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition">Scene 2</button>
+        <button onclick="switchScene(3)" id="scene-3-tab" class="px-4 py-2 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40 font-semibold shadow transition">Scene 3</button>
+        <button onclick="switchScene(4)" id="scene-4-tab" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition">Scene 4</button>
+      </div>
+    </div>
+
+    <!-- Active Scenario Description -->
+    <div class="bg-[#121820]/90 border border-slate-800/80 rounded-xl px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      <div>
+        <span class="text-slate-400 font-semibold">Prompt: </span>
+        <span id="scene-prompt" class="text-slate-200">Two basketball players stand on a court and take turns speaking.</span>
+        <span class="text-slate-500 ml-2">&bull; Camera: Moves forward</span>
+      </div>
+      <div class="flex items-center gap-4 text-slate-400 mono">
+        <span id="turn-indicator" class="px-2.5 py-1 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 font-medium">Agent Turn (Channel 0)</span>
+        <span id="response-gap-metric" class="text-slate-300">Hand-Over Gap: <strong class="text-teal-400">0.28 s</strong></span>
+      </div>
+    </div>
+
+    <!-- Main Studio Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+
+      <!-- Left Panel: Scene Visualizer & TurnScope Acoustic Telemetry (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-4">
+
+        <!-- Visual Canvas Card -->
+        <div class="relative bg-[#131924] border border-slate-800 rounded-2xl overflow-hidden aspect-[4/3] flex flex-col justify-between shadow-2xl group">
+          <!-- Background Scene Canvas -->
+          <canvas id="visual-canvas" class="absolute inset-0 w-full h-full object-cover"></canvas>
+
+          <!-- Top Overlay Indicators -->
+          <div class="relative z-10 p-3 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/30 to-transparent">
+            <span class="px-2.5 py-1 bg-black/60 backdrop-blur rounded text-[11px] font-medium text-slate-300 border border-white/10">
+              Dual-Channel Audio Camera
+            </span>
+            <div class="flex items-center gap-2">
+              <span id="rec-status" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live Spatial VAD
+              </span>
+            </div>
+          </div>
+
+          <!-- Bottom Audio Playback Control Strip -->
+          <div class="relative z-10 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <button id="btn-play" onclick="toggleAudio()" class="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-teal-500/20">
+                <svg id="play-icon" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+                <span id="play-text">Simulate Spatial Audio</span>
+              </button>
+              <div class="flex items-center gap-3 mono text-xs text-slate-300">
+                <span id="time-current">00:00</span> / <span id="time-total">00:15</span>
+              </div>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden cursor-pointer" onclick="scrubTimeline(event)">
+              <div id="play-progress" class="bg-teal-400 h-full w-[0%] transition-all duration-100"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Consistent Acoustics Applied Info Box (Direct from Reference) -->
+        <div class="bg-[#121820] border border-slate-800/90 rounded-2xl p-5 shadow-lg flex flex-col gap-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <span class="text-teal-400 font-semibold">Consistent acoustics</span> applied
+            </h3>
+            <span class="text-[11px] mono text-slate-400">TurnScope VAD active</span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-2.5 text-xs">
+            <div class="flex items-start justify-between">
+              <span class="text-slate-400 font-medium w-24">Direction:</span>
+              <span id="info-direction" class="text-slate-200 flex-1 text-right">Each voice has its own position.</span>
+            </div>
+            <div class="flex items-start justify-between">
+              <span class="text-slate-400 font-medium w-24">Distance:</span>
+              <span id="info-distance" class="text-slate-200 flex-1 text-right">Voice levels follow $1/r^2$ attenuation.</span>
+            </div>
+            <div class="flex items-start justify-between">
+              <span class="text-slate-400 font-medium w-24">Room:</span>
+              <span id="info-room" class="text-slate-200 flex-1 text-right">Court reflections add depth (early reverb).</span>
+            </div>
+            <div class="flex items-start justify-between border-t border-slate-800/60 pt-2">
+              <span class="text-teal-400 font-medium w-24">Leakage Bleed:</span>
+              <span id="info-leakage" class="text-slate-300 flex-1 text-right mono">-24.8 dB (Cross-talk masked)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TurnScope Metrics Card -->
+        <div class="bg-[#121820] border border-slate-800/90 rounded-2xl p-5 shadow-lg flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">TurnScope Call-Timing Telemetry</h4>
+            <span class="text-[10px] bg-slate-800 text-teal-300 px-2 py-0.5 rounded font-mono">Real Data Check</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-[#18202b] p-3 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400 uppercase font-medium">Turn Median Err</div>
+              <div class="text-lg font-bold text-emerald-400 mono mt-0.5">0.277 s</div>
+              <div class="text-[9px] text-slate-500">-32% vs baseline</div>
+            </div>
+            <div class="bg-[#18202b] p-3 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400 uppercase font-medium">P90 Tail Err</div>
+              <div class="text-lg font-bold text-teal-300 mono mt-0.5">0.440 s</div>
+              <div class="text-[9px] text-slate-500">-67% vs baseline</div>
+            </div>
+            <div class="bg-[#18202b] p-3 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400 uppercase font-medium">Speech F1</div>
+              <div class="text-lg font-bold text-cyan-400 mono mt-0.5">0.897</div>
+              <div class="text-[9px] text-slate-500">85.6% recall</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Interactive 2D Spatial Soundfield Radar (7 cols) -->
+      <div class="lg:col-span-7 bg-[#121820] border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden">
+
+        <!-- Top Radar Headers -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-2">
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 rounded-full bg-teal-400 animate-ping"></div>
+            <h2 class="text-base font-bold text-white tracking-wide">Acoustic Soundfield Map</h2>
+            <span class="text-xs text-slate-400 mono bg-slate-800/80 px-2.5 py-0.5 rounded border border-slate-700">28 m &times; 15 m</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs mono text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-teal-400"></span> Player 1 (Agent)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Player 2 (Cust)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-white border border-slate-400"></span> Listener Mic</span>
+          </div>
+        </div>
+
+        <!-- 2D Interactive Radar Canvas Area -->
+        <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden border border-slate-800/90 bg-[#0d1218] radar-grid flex items-center justify-center">
+          <canvas id="radar-canvas" class="w-full h-full cursor-crosshair"></canvas>
+
+          <!-- Instructions Overlay pill -->
+          <div class="absolute top-3 left-3 bg-black/60 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg text-[11px] text-slate-300 pointer-events-none flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+            <span>Drag <strong>Player 1</strong>, <strong>Player 2</strong>, or <strong>Listener Mic</strong> to manipulate spatial acoustics in real-time</span>
+          </div>
+
+          <!-- Bottom Court Label -->
+          <div class="absolute bottom-2 text-center text-[10px] tracking-widest uppercase font-bold text-slate-600 pointer-events-none">
+            <span id="arena-name">BASKETBALL COURT &bull; ACOUSTIC GRID</span>
+          </div>
+        </div>
+
+        <!-- Acoustic Modulation Sliders -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 mt-2 border-t border-slate-800/80">
+          <!-- Room Reverb -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between text-xs font-medium text-slate-400">
+              <span>Court Reverb / Depth:</span>
+              <span id="reverb-val" class="mono text-teal-300">45%</span>
+            </div>
+            <input type="range" id="slider-reverb" min="0" max="100" value="45" oninput="updateReverb(this.value)" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400">
+          </div>
+
+          <!-- Cross-Channel Leakage -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between text-xs font-medium text-slate-400">
+              <span>Leakage Bleed Margin:</span>
+              <span id="leakage-val" class="mono text-cyan-300">-25 dB</span>
+            </div>
+            <input type="range" id="slider-leakage" min="-45" max="-10" value="-25" oninput="updateLeakage(this.value)" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+          </div>
+
+          <!-- Turn Transition Pace -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between text-xs font-medium text-slate-400">
+              <span>Turn Hand-Over Speed:</span>
+              <span id="speed-val" class="mono text-emerald-300">1.0x</span>
+            </div>
+            <input type="range" id="slider-speed" min="5" max="25" value="10" oninput="updateSpeed(this.value)" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400">
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    // Audio Context & Spatial Nodes
+    let audioCtx = null;
+    let isPlaying = false;
+    let acousticMode = 'spatial'; // 'original' or 'spatial'
+    let currentScene = 3;
+    let animFrameId = null;
+
+    // Simulation Clock
+    let simTime = 0;
+    const simDuration = 15.0; // 15 seconds loop
+    let playbackSpeed = 1.0;
+    let roomReverbRatio = 0.45;
+    let leakageMarginDb = -25.0;
+
+    // Nodes Coordinates in Meter Space (Court is 28m wide x 15m deep)
+    // Origin (0,0) is center-bottom where listener begins
+    const state = {
+      courtWidth: 28.0,
+      courtDepth: 15.0,
+      listener: { x: 0.0, y: 1.8, label: 'Listener', isDragging: false },
+      player1: { x: -4.2, y: 10.5, label: 'Player 1', color: '#2dd4bf', db: 58.0, dist: 4.0, angle: 19, active: false, isDragging: false },
+      player2: { x: 3.9, y: 10.2, label: 'Player 2', color: '#06b6d4', db: 58.4, dist: 3.8, angle: 20, active: false, isDragging: false }
+    };
+
+    // Scene Configurations
+    const scenes = {
+      1: {
+        prompt: "Customer Service Agent resolves refund request with customer.",
+        arena: "CALL CENTER &bull; DUAL MONO BOOTH",
+        direction: "Clean stereo separation between agent (Ch 0) and caller (Ch 1).",
+        distance: "Close-mic proximity effect, zero acoustic bleed.",
+        room: "Dry acoustic booth (minimal reverberation).",
+        leakage: "-35 dB",
+        p1: { x: -3.5, y: 8.0, label: "Agent" },
+        p2: { x: 3.5, y: 8.0, label: "Customer" },
+        listener: { x: 0.0, y: 1.5 }
+      },
+      2: {
+        prompt: "Executive board meeting with rapid turn-taking and occasional barge-in.",
+        arena: "CONFERENCE BOARDROOM &bull; REFLECTIVE GLASS",
+        direction: "Table-spaced microphones with cross-table reflections.",
+        distance: "Medium acoustic distance (2.5m - 4.0m).",
+        room: "Moderate glass and mahogany early reflections.",
+        leakage: "-18 dB",
+        p1: { x: -5.0, y: 7.0, label: "Executive A" },
+        p2: { x: 2.0, y: 11.0, label: "Executive B" },
+        listener: { x: 0.0, y: 1.5 }
+      },
+      3: {
+        prompt: "Two basketball players stand on a court and take turns speaking. Camera moves forward.",
+        arena: "BASKETBALL COURT &bull; ACOUSTIC GRID (28m x 15m)",
+        direction: "Player 1 at 19° Left, Player 2 at 20° Right.",
+        distance: "Voice levels follow inverse-square distance attenuation.",
+        room: "Court reflections add expansive depth and natural echo.",
+        leakage: "-25 dB",
+        p1: { x: -4.2, y: 10.5, label: "Player 1" },
+        p2: { x: 3.9, y: 10.2, label: "Player 2" },
+        listener: { x: 0.0, y: 1.8 }
+      },
+      4: {
+        prompt: "Studio podcast recording with dynamic vocal projection and headphone bleed.",
+        arena: "BROADCAST STUDIO &bull; BOOM MIC SPATIAL STAGE",
+        direction: "Left/Right stereo panning with acoustic cross-feed.",
+        distance: "1.2m conversational spacing.",
+        room: "Warm treated wood panels with diffuse dispersion.",
+        leakage: "-22 dB",
+        p1: { x: -2.0, y: 5.5, label: "Host" },
+        p2: { x: 2.0, y: 5.5, label: "Guest" },
+        listener: { x: 0.0, y: 1.2 }
+      }
+    };
+
+    // Canvas References
+    const radarCanvas = document.getElementById('radar-canvas');
+    const visualCanvas = document.getElementById('visual-canvas');
+    const radarCtx = radarCanvas.getContext('2d');
+    const visualCtx = visualCanvas.getContext('2d');
+
+    // Resize Canvases
+    function resizeCanvases() {
+      const dpr = window.devicePixelRatio || 1;
+      
+      const rRect = radarCanvas.getBoundingClientRect();
+      radarCanvas.width = rRect.width * dpr;
+      radarCanvas.height = rRect.height * dpr;
+      radarCtx.scale(dpr, dpr);
+
+      const vRect = visualCanvas.getBoundingClientRect();
+      visualCanvas.width = vRect.width * dpr;
+      visualCanvas.height = vRect.height * dpr;
+      visualCtx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', resizeCanvases);
+
+    // Coordinate Conversion (Meters <-> Radar Canvas Pixels)
+    function meterToPixel(x, y, width, height) {
+      const padding = 35;
+      const drawW = width - padding * 2;
+      const drawH = height - padding * 2;
+      
+      const px = padding + ((x + state.courtWidth / 2) / state.courtWidth) * drawW;
+      const py = height - padding - (y / state.courtDepth) * drawH;
+      return { x: px, y: py };
+    }
+
+    function pixelToMeter(px, py, width, height) {
+      const padding = 35;
+      const drawW = width - padding * 2;
+      const drawH = height - padding * 2;
+
+      const mx = ((px - padding) / drawW) * state.courtWidth - state.courtWidth / 2;
+      const my = (height - padding - py) / drawH * state.courtDepth;
+      return { x: mx, y: Math.max(0.2, my) };
+    }
+
+    // Geometry & Acoustic Recalculation
+    function calculateAcoustics() {
+      const calcForPlayer = (p) => {
+        const dx = p.x - state.listener.x;
+        const dy = p.y - state.listener.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        p.dist = Math.max(0.5, dist);
+
+        // Azimuth angle from listener's forward vector (0° is straight ahead)
+        const rad = Math.atan2(dx, dy);
+        p.angle = Math.round(rad * (180 / Math.PI));
+
+        // dB calculation based on distance and mode
+        const baseDb = 70.0;
+        if (acousticMode === 'original') {
+          p.db = 60.0; // flat mono
+        } else {
+          // Inverse square law: 20 * log10(d0 / d)
+          const atten = 20 * Math.log10(p.dist / 1.0);
+          p.db = Math.max(40.0, Math.min(78.0, baseDb - atten)).toFixed(1);
+        }
+      };
+
+      calcForPlayer(state.player1);
+      calcForPlayer(state.player2);
+
+      // Update Web Audio Panners if active
+      updateWebAudioNodes();
+    }
+
+    // Web Audio Engine (3D HRTF & Stereo Panner)
+    let panner1 = null;
+    let panner2 = null;
+    let gain1 = null;
+    let gain2 = null;
+    let synthOsc1 = null;
+    let synthOsc2 = null;
+
+    function initWebAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      // Create stereo synthesizers for Player 1 & Player 2
+      if (!panner1) {
+        // Player 1 Panner
+        panner1 = audioCtx.createStereoPanner();
+        gain1 = audioCtx.createGain();
+        gain1.gain.value = 0;
+
+        // Player 2 Panner
+        panner2 = audioCtx.createStereoPanner();
+        gain2 = audioCtx.createGain();
+        gain2.gain.value = 0;
+
+        // Connect to destination
+        panner1.connect(audioCtx.destination);
+        panner2.connect(audioCtx.destination);
+        gain1.connect(panner1);
+        gain2.connect(panner2);
+
+        // Continuous subtle speech modulation oscillators
+        synthOsc1 = audioCtx.createOscillator();
+        synthOsc1.type = 'triangle';
+        synthOsc1.frequency.value = 160; // male / low pitch voice
+        synthOsc1.connect(gain1);
+        synthOsc1.start();
+
+        synthOsc2 = audioCtx.createOscillator();
+        synthOsc2.type = 'sine';
+        synthOsc2.frequency.value = 240; // higher pitch voice
+        synthOsc2.connect(gain2);
+        synthOsc2.start();
+      }
+    }
+
+    function updateWebAudioNodes() {
+      if (!audioCtx || !panner1 || !panner2) return;
+
+      if (acousticMode === 'original') {
+        panner1.pan.setValueAtTime(0, audioCtx.currentTime);
+        panner2.pan.setValueAtTime(0, audioCtx.currentTime);
+      } else {
+        // Map angle (-90° to +90°) to pan (-1.0 to +1.0)
+        const pan1 = Math.max(-1.0, Math.min(1.0, state.player1.angle / 45.0));
+        const pan2 = Math.max(-1.0, Math.min(1.0, state.player2.angle / 45.0));
+        panner1.pan.setValueAtTime(pan1, audioCtx.currentTime);
+        panner2.pan.setValueAtTime(pan2, audioCtx.currentTime);
+      }
+    }
+
+    function toggleAudio() {
+      initWebAudio();
+      isPlaying = !isPlaying;
+      const btnText = document.getElementById('play-text');
+      const icon = document.getElementById('play-icon');
+
+      if (isPlaying) {
+        btnText.textContent = "Pause Simulation";
+        icon.innerHTML = '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>';
+      } else {
+        btnText.textContent = "Simulate Spatial Audio";
+        icon.innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>';
+        if (gain1 && gain2) {
+          gain1.gain.value = 0;
+          gain2.gain.value = 0;
+        }
+      }
+    }
+
+    // Set Acoustic Mode (Original vs Spatial)
+    function setAcousticMode(mode) {
+      acousticMode = mode;
+      const btnOrig = document.getElementById('btn-orig');
+      const btnSpatial = document.getElementById('btn-spatial');
+
+      if (mode === 'original') {
+        btnOrig.className = "flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider bg-[#1a262f] border border-orange-500/50 text-orange-300 shadow-md flex flex-col items-center gap-0.5";
+        btnSpatial.className = "flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex flex-col items-center gap-0.5";
+        document.getElementById('info-direction').textContent = "Mono downmix (all voices centered).";
+        document.getElementById('info-distance').textContent = "Static studio loudness (no distance depth).";
+        document.getElementById('info-room').textContent = "Acoustic reflections collapsed into mono.";
+      } else {
+        btnSpatial.className = "flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider bg-[#1a262f] border border-teal-500/50 text-teal-300 shadow-md flex flex-col items-center gap-0.5";
+        btnOrig.className = "flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex flex-col items-center gap-0.5";
+        document.getElementById('info-direction').textContent = "Each voice has its own position.";
+        document.getElementById('info-distance').textContent = "Voice levels follow inverse-square attenuation.";
+        document.getElementById('info-room').textContent = "Court reflections add depth (early reverb).";
+      }
+      calculateAcoustics();
+    }
+
+    // Switch Scene
+    function switchScene(id) {
+      currentScene = id;
+      for (let i = 1; i <= 4; i++) {
+        const tab = document.getElementById(`scene-${i}-tab`);
+        if (i === id) {
+          tab.className = "px-4 py-2 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40 font-semibold shadow transition";
+        } else {
+          tab.className = "px-4 py-2 rounded-lg text-slate-400 hover:text-white transition";
+        }
+      }
+      const s = scenes[id];
+      document.getElementById('scene-prompt').textContent = s.prompt;
+      document.getElementById('arena-name').innerHTML = s.arena;
+      document.getElementById('info-direction').textContent = s.direction;
+      document.getElementById('info-distance').textContent = s.distance;
+      document.getElementById('info-room').textContent = s.room;
+      document.getElementById('info-leakage').textContent = `${s.leakage} (Cross-talk masked)`;
+
+      state.player1.x = s.p1.x;
+      state.player1.y = s.p1.y;
+      state.player1.label = s.p1.label;
+      state.player2.x = s.p2.x;
+      state.player2.y = s.p2.y;
+      state.player2.label = s.p2.label;
+      state.listener.x = s.listener.x;
+      state.listener.y = s.listener.y;
+
+      calculateAcoustics();
+    }
+
+    // Slider Controls
+    function updateReverb(val) {
+      roomReverbRatio = val / 100.0;
+      document.getElementById('reverb-val').textContent = `${val}%`;
+    }
+    function updateLeakage(val) {
+      leakageMarginDb = parseFloat(val);
+      document.getElementById('leakage-val').textContent = `${val} dB`;
+    }
+    function updateSpeed(val) {
+      playbackSpeed = val / 10.0;
+      document.getElementById('speed-val').textContent = `${playbackSpeed.toFixed(1)}x`;
+    }
+
+    function scrubTimeline(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pos = (e.clientX - rect.left) / rect.width;
+      simTime = pos * simDuration;
+    }
+
+    // Draw Radar Canvas
+    function drawRadar() {
+      const rect = radarCanvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      radarCtx.clearRect(0, 0, w, h);
+
+      // Listening Frustum Cone (FOV)
+      const lp = meterToPixel(state.listener.x, state.listener.y, w, h);
+      radarCtx.save();
+      const coneGrad = radarCtx.createRadialGradient(lp.x, lp.y, 10, lp.x, lp.y, h * 0.9);
+      coneGrad.addColorStop(0, 'rgba(45, 212, 191, 0.12)');
+      coneGrad.addColorStop(0.8, 'rgba(45, 212, 191, 0.03)');
+      coneGrad.addColorStop(1, 'transparent');
+
+      radarCtx.beginPath();
+      radarCtx.moveTo(lp.x, lp.y);
+      radarCtx.lineTo(lp.x - w * 0.38, 25);
+      radarCtx.lineTo(lp.x + w * 0.38, 25);
+      radarCtx.closePath();
+      radarCtx.fillStyle = coneGrad;
+      radarCtx.fill();
+      radarCtx.restore();
+
+      // Draw Distance Arcs
+      radarCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      radarCtx.lineWidth = 1;
+      radarCtx.setLineDash([4, 4]);
+      [3, 6, 9, 12].forEach(distM => {
+        const radPix = (distM / state.courtDepth) * (h - 70);
+        radarCtx.beginPath();
+        radarCtx.arc(lp.x, lp.y, radPix, Math.PI, 2 * Math.PI);
+        radarCtx.stroke();
+      });
+      radarCtx.setLineDash([]);
+
+      // Draw Rays & Labels to Each Player
+      const drawRayAndPlayer = (p, color, num) => {
+        const pp = meterToPixel(p.x, p.y, w, h);
+
+        // Ray line
+        radarCtx.strokeStyle = p.active ? color : 'rgba(255, 255, 255, 0.25)';
+        radarCtx.lineWidth = p.active ? 2 : 1;
+        radarCtx.setLineDash([3, 3]);
+        radarCtx.beginPath();
+        radarCtx.moveTo(lp.x, lp.y);
+        radarCtx.lineTo(pp.x, pp.y);
+        radarCtx.stroke();
+        radarCtx.setLineDash([]);
+
+        // Ray Annotation (Distance & Angle)
+        const midX = (lp.x + pp.x) / 2;
+        const midY = (lp.y + pp.y) / 2;
+        radarCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        radarCtx.font = '10px JetBrains Mono';
+        radarCtx.textAlign = num === 1 ? 'right' : 'left';
+        const angleLabel = p.angle < 0 ? `${Math.abs(p.angle)}° L` : `${p.angle}° R`;
+        radarCtx.fillText(`${p.dist.toFixed(2)} m`, midX + (num === 1 ? -8 : 8), midY - 6);
+        radarCtx.fillText(angleLabel, midX + (num === 1 ? -8 : 8), midY + 8);
+
+        // dB Badge Above Node
+        radarCtx.fillStyle = color;
+        radarCtx.font = 'bold 11px JetBrains Mono';
+        radarCtx.textAlign = 'center';
+        radarCtx.fillText(`${p.db} dB`, pp.x, pp.y - 24);
+
+        // Player Node Outer Circle & Glow
+        if (p.active) {
+          radarCtx.save();
+          radarCtx.beginPath();
+          radarCtx.arc(pp.x, pp.y, 24, 0, 2 * Math.PI);
+          radarCtx.fillStyle = `${color}22`;
+          radarCtx.fill();
+          radarCtx.strokeStyle = color;
+          radarCtx.lineWidth = 2;
+          radarCtx.stroke();
+          radarCtx.restore();
+        }
+
+        // Player Node Body
+        radarCtx.beginPath();
+        radarCtx.arc(pp.x, pp.y, 16, 0, 2 * Math.PI);
+        radarCtx.fillStyle = color;
+        radarCtx.fill();
+
+        // Node Label
+        radarCtx.fillStyle = '#0b0f14';
+        radarCtx.font = 'bold 10px Inter';
+        radarCtx.fillText(num === 1 ? 'P1' : 'P2', pp.x, pp.y + 3.5);
+
+        // "Drag me" hint
+        radarCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        radarCtx.font = '9px Inter';
+        radarCtx.textAlign = 'left';
+        radarCtx.fillText('Drag me', pp.x + 22, pp.y + 3);
+      };
+
+      drawRayAndPlayer(state.player1, state.player1.color, 1);
+      drawRayAndPlayer(state.player2, state.player2.color, 2);
+
+      // Draw Listener Node
+      radarCtx.save();
+      radarCtx.beginPath();
+      radarCtx.arc(lp.x, lp.y, 10, 0, 2 * Math.PI);
+      radarCtx.fillStyle = '#ffffff';
+      radarCtx.fill();
+      radarCtx.strokeStyle = '#2dd4bf';
+      radarCtx.lineWidth = 2;
+      radarCtx.stroke();
+
+      // Listener Direction Indicator (headphone ears)
+      radarCtx.beginPath();
+      radarCtx.arc(lp.x - 12, lp.y, 3.5, 0, 2 * Math.PI);
+      radarCtx.arc(lp.x + 12, lp.y, 3.5, 0, 2 * Math.PI);
+      radarCtx.fillStyle = '#2dd4bf';
+      radarCtx.fill();
+
+      radarCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      radarCtx.font = '9px Inter';
+      radarCtx.textAlign = 'left';
+      radarCtx.fillText('Drag me', lp.x + 18, lp.y + 3);
+      radarCtx.restore();
+    }
+
+    // Draw Visual Perspective Canvas (Left Panel)
+    function drawVisualScene() {
+      const rect = visualCanvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      visualCtx.clearRect(0, 0, w, h);
+
+      // Simulated Indoor Gymnasium / Court Backdrop
+      const skyGrad = visualCtx.createLinearGradient(0, 0, 0, h);
+      skyGrad.addColorStop(0, '#151d26');
+      skyGrad.addColorStop(0.55, '#1e2833');
+      skyGrad.addColorStop(0.56, '#8b694b');
+      skyGrad.addColorStop(1, '#533a25');
+      visualCtx.fillStyle = skyGrad;
+      visualCtx.fillRect(0, 0, w, h);
+
+      // Perspective Court Lines
+      visualCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      visualCtx.lineWidth = 1.5;
+      visualCtx.beginPath();
+      visualCtx.moveTo(w * 0.5, h * 0.55);
+      visualCtx.lineTo(w * 0.5, h); // center line
+      visualCtx.moveTo(w * 0.1, h);
+      visualCtx.lineTo(w * 0.4, h * 0.55); // left sideline
+      visualCtx.moveTo(w * 0.9, h);
+      visualCtx.lineTo(w * 0.6, h * 0.55); // right sideline
+      visualCtx.stroke();
+
+      // Basketball Hoop in background
+      visualCtx.fillStyle = '#ffffff';
+      visualCtx.fillRect(w * 0.47, h * 0.38, w * 0.06, h * 0.04);
+      visualCtx.strokeStyle = '#ea580c';
+      visualCtx.lineWidth = 2;
+      visualCtx.strokeRect(w * 0.485, h * 0.41, w * 0.03, h * 0.015);
+
+      // Draw Player Figures with Responsive Positioning
+      const drawFigure = (player, jerseyColor, xScreenRatio, label) => {
+        const px = w * xScreenRatio;
+        // Distance scaling
+        const scale = Math.max(0.65, Math.min(1.2, 5.0 / player.dist));
+        const py = h * 0.72;
+
+        visualCtx.save();
+        visualCtx.translate(px, py);
+        visualCtx.scale(scale, scale);
+
+        // Active Speaking Halo Circle (Around Head)
+        if (player.active) {
+          visualCtx.beginPath();
+          visualCtx.arc(0, -70, 20, 0, 2 * Math.PI);
+          visualCtx.strokeStyle = player.color;
+          visualCtx.lineWidth = 3;
+          visualCtx.stroke();
+
+          // Pulsing energy waves
+          visualCtx.beginPath();
+          visualCtx.arc(0, -70, 28, 0, 2 * Math.PI);
+          visualCtx.strokeStyle = `${player.color}66`;
+          visualCtx.lineWidth = 1.5;
+          visualCtx.stroke();
+        }
+
+        // Head
+        visualCtx.fillStyle = '#e2b391';
+        visualCtx.beginPath();
+        visualCtx.arc(0, -70, 14, 0, 2 * Math.PI);
+        visualCtx.fill();
+
+        // Jersey / Body
+        visualCtx.fillStyle = jerseyColor;
+        visualCtx.fillRect(-14, -55, 28, 45);
+
+        // Shorts
+        visualCtx.fillStyle = jerseyColor === '#dc2626' ? '#b91c1c' : '#1d4ed8';
+        visualCtx.fillRect(-13, -10, 26, 20);
+
+        // Legs
+        visualCtx.fillStyle = '#e2b391';
+        visualCtx.fillRect(-10, 10, 6, 25);
+        visualCtx.fillRect(4, 10, 6, 25);
+
+        // Shoes
+        visualCtx.fillStyle = '#ffffff';
+        visualCtx.fillRect(-12, 33, 8, 5);
+        visualCtx.fillRect(4, 33, 8, 5);
+
+        // Subtitle badge
+        visualCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        visualCtx.fillRect(-35, 45, 70, 16);
+        visualCtx.fillStyle = player.color;
+        visualCtx.font = 'bold 9px Inter';
+        visualCtx.textAlign = 'center';
+        visualCtx.fillText(`${label} (${player.db} dB)`, 0, 56);
+
+        visualCtx.restore();
+      };
+
+      // Player 1 (Red / Left) & Player 2 (Blue / Right)
+      const p1Screen = 0.5 + (state.player1.x / state.courtWidth) * 1.5;
+      const p2Screen = 0.5 + (state.player2.x / state.courtWidth) * 1.5;
+
+      drawFigure(state.player1, '#dc2626', Math.max(0.2, Math.min(0.48, p1Screen)), state.player1.label);
+      drawFigure(state.player2, '#2563eb', Math.max(0.52, Math.min(0.8, p2Screen)), state.player2.label);
+    }
+
+    // Main Simulation Loop (15s Conversational Cycle)
+    let lastTimestamp = performance.now();
+    function loop(now) {
+      const dt = (now - lastTimestamp) / 1000.0;
+      lastTimestamp = now;
+
+      if (isPlaying) {
+        simTime += dt * playbackSpeed;
+        if (simTime >= simDuration) simTime = 0;
+      }
+
+      // Turn-taking Scripting Timeline:
+      // 0.0 - 5.5s: Player 1 (Agent) speaks
+      // 5.5 - 5.78s: Hand-over gap (0.28s) -> Hand-over trigger!
+      // 5.78 - 11.5s: Player 2 (Customer) speaks
+      // 9.5 - 10.2s: Brief barge-in overlap
+      // 11.5 - 15.0s: Wrap-up & quick transition back
+      const cycle = simTime % 15.0;
+      let p1Active = false;
+      let p2Active = false;
+      let turnText = "";
+
+      if (cycle >= 0.5 && cycle < 5.5) {
+        p1Active = true;
+        turnText = "Agent Speaking (Channel 0)";
+      } else if (cycle >= 5.5 && cycle < 5.78) {
+        turnText = "Turn Hand-Over Gap (0.28 s)";
+      } else if (cycle >= 5.78 && cycle < 11.5) {
+        p2Active = true;
+        turnText = "Customer Speaking (Channel 1)";
+        if (cycle >= 9.2 && cycle < 10.0) {
+          p1Active = true; // Natural Overlap / Barge-in
+          turnText = "Natural Overlap / Barge-in Detected";
+        }
+      } else if (cycle >= 11.5 && cycle < 14.5) {
+        p1Active = true;
+        turnText = "Agent Responding (Channel 0)";
+      } else {
+        turnText = "Dead Air Gap (Bridged)";
+      }
+
+      state.player1.active = p1Active;
+      state.player2.active = p2Active;
+
+      // Update Audio Gains if running
+      if (gain1 && gain2 && isPlaying) {
+        const vol1 = p1Active ? (state.player1.db / 80.0) * 0.4 : 0;
+        const vol2 = p2Active ? (state.player2.db / 80.0) * 0.4 : 0;
+        gain1.gain.setTargetAtTime(vol1, audioCtx.currentTime, 0.05);
+        gain2.gain.setTargetAtTime(vol2, audioCtx.currentTime, 0.05);
+      }
+
+      // Update UI Indicators
+      document.getElementById('turn-indicator').textContent = turnText;
+      const progressPercent = ((simTime / simDuration) * 100).toFixed(1);
+      document.getElementById('play-progress').style.width = `${progressPercent}%`;
+
+      const curSec = Math.floor(simTime);
+      document.getElementById('time-current').textContent = `00:${curSec < 10 ? '0' : ''}${curSec}`;
+
+      // Render Canvases
+      drawRadar();
+      drawVisualScene();
+
+      animFrameId = requestAnimationFrame(loop);
+    }
+
+    // Interactive Dragging on Radar Canvas
+    let draggedEntity = null;
+
+    function getPointerPos(e) {
+      const rect = radarCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    function checkHit(pos, entity) {
+      const p = meterToPixel(entity.x, entity.y, radarCanvas.clientWidth, radarCanvas.clientHeight);
+      const dx = pos.x - p.x;
+      const dy = pos.y - p.y;
+      return Math.sqrt(dx * dx + dy * dy) <= 24;
+    }
+
+    function onPointerDown(e) {
+      const pos = getPointerPos(e);
+      if (checkHit(pos, state.player1)) {
+        draggedEntity = state.player1;
+      } else if (checkHit(pos, state.player2)) {
+        draggedEntity = state.player2;
+      } else if (checkHit(pos, state.listener)) {
+        draggedEntity = state.listener;
+      }
+      if (draggedEntity) {
+        draggedEntity.isDragging = true;
+        radarCanvas.style.cursor = 'grabbing';
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!draggedEntity) return;
+      const pos = getPointerPos(e);
+      const m = pixelToMeter(pos.x, pos.y, radarCanvas.clientWidth, radarCanvas.clientHeight);
+      
+      draggedEntity.x = Math.max(-state.courtWidth / 2 + 1, Math.min(state.courtWidth / 2 - 1, m.x));
+      draggedEntity.y = Math.max(0.5, Math.min(state.courtDepth - 0.5, m.y));
+
+      calculateAcoustics();
+    }
+
+    function onPointerUp() {
+      if (draggedEntity) {
+        draggedEntity.isDragging = false;
+        draggedEntity = null;
+        radarCanvas.style.cursor = 'crosshair';
+      }
+    }
+
+    radarCanvas.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+
+    radarCanvas.addEventListener('touchstart', onPointerDown, { passive: true });
+    window.addEventListener('touchmove', onPointerMove, { passive: true });
+    window.addEventListener('touchend', onPointerUp);
+
+    // Initial Setup
+    resizeCanvases();
+    calculateAcoustics();
+    animFrameId = requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
