@@ -23,7 +23,42 @@ def main(argv=None) -> int:
     c.add_argument("--csv", type=Path, help="write one summary row per call to this CSV file")
     c.add_argument("--max-median-response", type=float, help="exit 1 if any call's median response delay is above this many seconds")
     c.add_argument("--max-p90-response", type=float, help="exit 1 if any call's p90 response delay is above this many seconds")
+
+    s = sub.add_parser("studio", help="launch interactive spatial audio critic & radar studio in browser")
+    s.add_argument("--port", type=int, default=8765, help="local port to serve on (default: 8765)")
     a = ap.parse_args(argv)
+
+    if a.cmd == "studio":
+        import http.server
+        import socketserver
+        import threading
+        import time
+        import webbrowser
+
+        root_dir = Path(__file__).resolve().parent.parent.parent
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=str(root_dir), **kwargs)
+            def log_message(self, format, *args):
+                pass
+
+        socketserver.TCPServer.allow_reuse_address = True
+        for p in range(a.port, a.port + 20):
+            try:
+                with socketserver.TCPServer(("", p), Handler) as httpd:
+                    url = f"http://localhost:{p}/spatial_audio_critic_studio.html"
+                    print(f"\nTurnScope Spatial Audio Critic Studio running at: {url}\nOpening browser...")
+                    threading.Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url))).start()
+                    try:
+                        httpd.serve_forever()
+                    except KeyboardInterrupt:
+                        print("\nStudio closed.")
+                        return 0
+                    break
+            except OSError:
+                continue
+        return 0
+
     if a.source.is_dir():
         files = sorted(p for p in a.source.rglob("*") if p.suffix.lower() in AUDIO_EXT)
     elif a.source.is_file():
