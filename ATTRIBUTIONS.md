@@ -11,3 +11,4 @@
 - **Evaluation Set (`recordings/`)**: 6 full-length two-channel conversations (`conv01.wav` through `conv06.wav`), 3,021 labelled ground-truth speech segments, 449 labelled turn hand-overs.
 - **Held-out Unseen Set (`unseen/`)**: 2 full-length two-channel conversations (`unseen01.wav`, `unseen02.wav`), 1,128 labelled speech segments, reserved for post-validation checks per project rules.
 - **Audio Privacy**: As per project guidelines, raw audio files remain local on disk and are excluded from Git version control.
+
