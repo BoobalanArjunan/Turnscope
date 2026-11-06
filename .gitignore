@@ -6,4 +6,13 @@ dist/
 real_check/
 .venv/
 .DS_Store
+recordings/
+unseen/
+cache_raw/
+*.wav
+*.mp3
+*.flac
+*.tar
+*.zip
+
 
