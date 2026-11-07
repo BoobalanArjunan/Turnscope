@@ -2,7 +2,7 @@
 
 Timing of a two-channel call recording (agent on one channel, customer on the other): how long the agent takes to answer, who interrupts whom, and where dead air happens.
 
-**Status: 0.1.0a1.** Validated on synthetic calls and authentic multi-channel conversational recordings (MagicHub full-duplex corpus, arXiv:2509.04093, CC BY 4.0). See benchmark results below.
+**Status: 0.1.0.** Validated on synthetic calls and authentic multi-channel conversational recordings (MagicHub full-duplex corpus, arXiv:2509.04093, CC BY 4.0). See benchmark results below.
 
 ## Use
 
