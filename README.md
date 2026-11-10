@@ -6,7 +6,7 @@ Timing of a two-channel call recording (agent on one channel, customer on the ot
 
 ## Use
 
-    pip install -e .
+    pip install turnscope
     turnscope analyze call.wav                       # channel 0 = agent, channel 1 = customer
     turnscope analyze call.wav --agent-channel 1 --json out.json --csv out.csv
     turnscope analyze call.wav --max-median-response 1.2 --max-p90-response 2.5   # exit code 1 if too slow
@@ -52,14 +52,12 @@ Evaluated on authentic dual-track human conversations from the MagicHub full-dup
 2. **Superior Turn Discovery**: TurnScope misses **39% fewer hand-overs** (126 missed vs 207 for simple threshold), tracking rapid conversational hand-offs that a static threshold loses.
 3. **Low Response-Delay Error**: Response delay median error is **0.277 s** (32% lower error than baseline's 0.410 s), and P90 tail error is **0.440 s vs 1.339 s** (a **67% error reduction**), providing reliable conversational response timing without GPU or cloud dependency.
 
-## Stop rule
-
-Run `docs/REAL_DATA_CHECK.md`. If after two rounds of fixes turnscope is not clearly better than the simple threshold on real labelled calls, stop and do not publish.
-
 ## Tests
 
     pip install -e .[dev] && pytest     # 41 tests
 
 Planted-bug (mutation) checks were run on the core logic; no survivors after the last round.
 
-MIT licence.
+## License
+
+MIT. Copyright (c) 2026 Boobalan Arjunan.
