@@ -19,10 +19,13 @@ def main(argv=None) -> int:
     c.add_argument("source", type=Path, help="a stereo file (one speaker per channel) or a folder of them")
     c.add_argument("--agent-channel", type=int, default=0, choices=(0, 1), help="which channel is the agent (default 0 = left)")
     c.add_argument("--customer", type=Path, help="the customer's own mono file, when the agent file is mono")
+    c.add_argument("--stall-gap", type=float, default=0.8, help="silence gap after a filler burst that triggers stall detection (default: 0.8 s)")
+    c.add_argument("--filler-burst", type=float, default=1.2, help="maximum speech duration to treat as a conversational filler (default: 1.2 s)")
     c.add_argument("--json", type=Path, help="write all numbers and events to this JSON file")
     c.add_argument("--csv", type=Path, help="write one summary row per call to this CSV file")
     c.add_argument("--max-median-response", type=float, help="exit 1 if any call's median response delay is above this many seconds")
     c.add_argument("--max-p90-response", type=float, help="exit 1 if any call's p90 response delay is above this many seconds")
+    c.add_argument("--max-median-ttra", type=float, help="exit 1 if any call's median time-to-real-answer (TTRA) is above this many seconds")
     a = ap.parse_args(argv)
     if a.source.is_dir():
         files = sorted(p for p in a.source.rglob("*") if p.suffix.lower() in AUDIO_EXT)
@@ -37,7 +40,7 @@ def main(argv=None) -> int:
     results, errors = [], 0
     for p in files:
         try:
-            results.append(analyse_file(p, a.agent_channel, a.customer))
+            results.append(analyse_file(p, a.agent_channel, a.customer, stall_gap=a.stall_gap, filler_burst=a.filler_burst))
             print(text(results[-1]))
         except CallError as e:
             errors += 1
@@ -48,7 +51,8 @@ def main(argv=None) -> int:
         write_csv(a.csv, results)
     over = [r.file for r in results
             if (a.max_median_response is not None and r.pct(50) is not None and r.pct(50) > a.max_median_response)
-            or (a.max_p90_response is not None and r.pct(90) is not None and r.pct(90) > a.max_p90_response)]
+            or (a.max_p90_response is not None and r.pct(90) is not None and r.pct(90) > a.max_p90_response)
+            or (a.max_median_ttra is not None and r.pct_ttra(50) is not None and r.pct_ttra(50) > a.max_median_ttra)]
     if over:
         print(f"\nresponse delay above the limit: {', '.join(over)}")
     return 1 if (over or (errors and not results)) else 0

@@ -1,8 +1,8 @@
 # turnscope
 
-Timing of a two-channel call recording (agent on one channel, customer on the other): how long the agent takes to answer, who interrupts whom, and where dead air happens.
+Timing of a two-channel call recording (agent on one channel, customer on the other): how long the agent takes to answer, who interrupts whom, where dead air happens, and intra-turn filler stalls.
 
-**Status: 0.1.0.** Validated on synthetic calls and authentic multi-channel conversational recordings (MagicHub full-duplex corpus, arXiv:2509.04093, CC BY 4.0). See benchmark results below.
+**Status: 0.2.0.** Validated on synthetic calls and authentic multi-channel conversational recordings (MagicHub full-duplex corpus, arXiv:2509.04093, CC BY 4.0).
 
 ## Use
 
@@ -10,8 +10,25 @@ Timing of a two-channel call recording (agent on one channel, customer on the ot
     turnscope analyze call.wav                       # channel 0 = agent, channel 1 = customer
     turnscope analyze call.wav --agent-channel 1 --json out.json --csv out.csv
     turnscope analyze call.wav --max-median-response 1.2 --max-p90-response 2.5   # exit code 1 if too slow
+    turnscope analyze call.wav --stall-gap 0.8 --filler-burst 1.2 --max-median-ttra 2.0
 
-It reports: response delay per hand-over (median, p90), agent interruptions of the customer, customer barge-ins (and whether the agent stopped), dead air of 3 s or more, and warnings (for example, one channel bleeding into the other).
+It reports:
+- **Response Delay / Time-to-Acknowledge (TTA):** Initial latency per hand-over (median, p90, worst).
+- **Intra-Turn Filler Stalls & Time-to-Real-Answer (TTRA):** Detects when an AI voice agent masks generation delay with filler phrases (*"Let me check that..."*) followed by an internal stall before the real response.
+- **Agent Interruptions & Customer Barge-Ins:** Who talked over whom, and whether the agent stopped or kept talking.
+- **Dead Air:** 3 s or more of silence on both sides.
+- **Channel Leakage:** Bleed between channels estimated and warned.
+
+## Intra-Turn Filler Stalls & Dual-Metric Latency (v0.2.0)
+
+Modern LLM voice agents frequently emit an instant acknowledgment burst (*"Sure, let me look into that"*, $\le 1.2\text{ s}$) and then stall for $1\text{–}3\text{ s}$ while retrieving data or awaiting completion. Traditional latency benchmarks only measure the initial voice onset, producing artificially low response times.
+
+TurnScope v0.2.0 introduces **dual-metric conversational latency**:
+1. **Time-to-Acknowledge (TTA):** Delay from customer end of speech to the onset of any agent speech (including fillers).
+2. **Time-to-Real-Answer (TTRA):** Delay from customer end of speech to the substantive answer after the internal stall.
+3. **Filler Stall Detection:** Triggered when an initial burst $\le \text{filler-burst}$ (default `1.2 s`) is followed by silence $\ge \text{stall-gap}$ (default `0.8 s`).
+
+*Acknowledgment: Feature requested and reviewed by AI/ML engineer Praneeth P K via open-source community feedback.*
 
 ## How it works (short)
 

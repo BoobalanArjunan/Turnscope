@@ -15,6 +15,8 @@ MAX_RESPONSE_S = 10.0      # a gap longer than this between turns is not a "resp
 DEAD_AIR_S = 3.0           # both sides silent for at least this long, between the first and last speech
 MIN_OVERLAP_S = 0.2        # overlaps shorter than this are normal conversational overlap and are not counted
 STRONG_LEAK_DB = -15.0     # if one side leaks into the other this loudly, timing near overlaps is unreliable
+DEFAULT_STALL_GAP_S = 0.8  # pause inside an agent's turn after a short burst that marks a filler stall
+DEFAULT_FILLER_BURST_S = 1.2  # max length of an initial burst to be considered an acknowledgment/filler
 
 
 class CallError(Exception):
@@ -23,9 +25,9 @@ class CallError(Exception):
 
 @dataclass
 class Event:
-    kind: str                  # "response" | "customer_pause" | "agent_interrupts" | "customer_barge_in"
+    kind: str                  # "response" | "customer_pause" | "agent_interrupts" | "customer_barge_in" | "filler_stall"
     at_s: float
-    value_s: float             # response: gap; interrupts: overlap length; barge_in: how long the agent kept talking
+    value_s: float             # response: gap; interrupts: overlap length; barge_in: how long agent kept talking; filler_stall: stall gap
     detail: str = ""
 
 
@@ -35,16 +37,21 @@ class Analysis:
     duration_s: float
     agent_speech_s: float
     customer_speech_s: float
-    responses: List[float] = field(default_factory=list)
+    responses: List[float] = field(default_factory=list)          # TTA (Time-to-Acknowledge / initial response delay)
+    real_responses: List[float] = field(default_factory=list)     # TTRA (Time-to-Real-Answer)
     events: List[Event] = field(default_factory=list)
     dead_air: List[Tuple[float, float]] = field(default_factory=list)
     agent_not_yielding: int = 0
+    stalls: List[Tuple[float, float, float, float]] = field(default_factory=list)  # (filler_end, answer_start, stall_dur, ttra)
     leak_agent_to_customer_db: Optional[float] = None
     leak_customer_to_agent_db: Optional[float] = None
     warnings: List[str] = field(default_factory=list)
 
     def pct(self, q: float) -> Optional[float]:
         return float(np.percentile(self.responses, q)) if self.responses else None
+
+    def pct_ttra(self, q: float) -> Optional[float]:
+        return float(np.percentile(self.real_responses, q)) if self.real_responses else None
 
     @property
     def interrupts(self) -> int:
@@ -53,6 +60,10 @@ class Analysis:
     @property
     def barge_ins(self) -> int:
         return sum(e.kind == "customer_barge_in" for e in self.events)
+
+    @property
+    def filler_stalls(self) -> int:
+        return len(self.stalls)
 
 
 def utterances(segs: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
@@ -89,12 +100,14 @@ def load_channels(path, agent_channel: int = 0, customer: Optional[Path] = None)
     return a[:n], c[:n], sr
 
 
-def analyse(agent: np.ndarray, customer: np.ndarray, sr: int, name: str = "") -> Analysis:
+def analyse(agent: np.ndarray, customer: np.ndarray, sr: int, name: str = "",
+            stall_gap: float = DEFAULT_STALL_GAP_S, filler_burst: float = DEFAULT_FILLER_BURST_S) -> Analysis:
     sa, sc, leak_ac, leak_ca = speech_segments(agent, customer, sr)
-    return from_segments(sa, sc, len(agent) / sr, name, leak_ac, leak_ca)
+    return from_segments(sa, sc, len(agent) / sr, name, leak_ac, leak_ca, stall_gap=stall_gap, filler_burst=filler_burst)
 
 
-def from_segments(sa, sc, duration_s: float, name: str = "", leak_ac=None, leak_ca=None) -> Analysis:
+def from_segments(sa, sc, duration_s: float, name: str = "", leak_ac=None, leak_ca=None,
+                  stall_gap: float = DEFAULT_STALL_GAP_S, filler_burst: float = DEFAULT_FILLER_BURST_S) -> Analysis:
     """Timing numbers from speech segments [(start_s, end_s)] of the agent and the customer (from turnscope's detector or from labels)."""
     res = Analysis(name, duration_s, sum(e - s for s, e in sa), sum(e - s for s, e in sc),
                    leak_agent_to_customer_db=leak_ac, leak_customer_to_agent_db=leak_ca)
@@ -107,23 +120,53 @@ def from_segments(sa, sc, duration_s: float, name: str = "", leak_ac=None, leak_
             res.warnings.append(f"strong leakage: the {who} is only {-leak:.0f} dB quieter; timing near overlaps is unreliable")
     ua, uc = utterances(sa), utterances(sc)
     allu = sorted([(s, e, "agent") for s, e in ua] + [(s, e, "customer") for s, e in uc])
+
+    last_customer_end = None
+    in_agent_turn = False
+    turn_response_idx = None
+    turn_had_stall = False
+
     for (xs, xe, xw), (ys, ye, yw) in zip(allu, allu[1:]):
+        if xw == "customer":
+            last_customer_end = xe
+            in_agent_turn = False
+            turn_response_idx = None
+            turn_had_stall = False
+
         if xw == yw:
+            if xw == "agent" and in_agent_turn and not turn_had_stall and last_customer_end is not None:
+                filler_dur = xe - xs
+                stall_gap_dur = ys - xe
+                if filler_dur <= filler_burst and stall_gap_dur >= stall_gap:
+                    ttra = ys - last_customer_end
+                    turn_had_stall = True
+                    res.stalls.append((xe, ys, stall_gap_dur, ttra))
+                    res.events.append(Event("filler_stall", xe, stall_gap_dur, f"filler {filler_dur:.2f} s, stall {stall_gap_dur:.2f} s, TTRA {ttra:.2f} s"))
+                    if turn_response_idx is not None and turn_response_idx < len(res.real_responses):
+                        res.real_responses[turn_response_idx] = ttra
             continue
+
         if ys >= xe:                                              # a clean hand-over
             gap = ys - xe
             if gap > MAX_RESPONSE_S:
                 continue
             if yw == "agent":
                 res.responses.append(gap)
+                res.real_responses.append(gap)
+                turn_response_idx = len(res.real_responses) - 1
+                in_agent_turn = True
+                turn_had_stall = False
                 res.events.append(Event("response", xe, gap))
             else:
+                in_agent_turn = False
+                turn_had_stall = False
                 res.events.append(Event("customer_pause", xe, gap))
         else:                                                     # y starts while x is still talking
             ov = min(xe, ye) - ys
             if ov < MIN_OVERLAP_S:
                 continue
             if yw == "agent":
+                in_agent_turn = False
                 res.events.append(Event("agent_interrupts", ys, ov, f"over customer for {ov:.2f} s"))
             else:
                 kept = xe - ys
@@ -141,6 +184,7 @@ def from_segments(sa, sc, duration_s: float, name: str = "", leak_ac=None, leak_
     return res
 
 
-def analyse_file(path, agent_channel: int = 0, customer: Optional[Path] = None) -> Analysis:
+def analyse_file(path, agent_channel: int = 0, customer: Optional[Path] = None,
+                 stall_gap: float = DEFAULT_STALL_GAP_S, filler_burst: float = DEFAULT_FILLER_BURST_S) -> Analysis:
     a, c, sr = load_channels(path, agent_channel, customer)
-    return analyse(a, c, sr, Path(path).name)
+    return analyse(a, c, sr, Path(path).name, stall_gap=stall_gap, filler_burst=filler_burst)

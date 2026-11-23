@@ -273,3 +273,77 @@ def test_quiet_sporadic_sounds_far_below_the_speech_are_not_speech():
         bg[int(s * SR):int(s * SR) + len(v)] += 0.004 * v
     r = analyse((x[:, 0] + bg).astype(np.float32), x[:, 1], SR)
     assert r.agent_speech_s == pytest.approx(1.5, abs=0.3)
+
+
+# ------------------------------------------------------------------ intra-turn filler stalls (v0.2.0)
+def test_intra_turn_filler_stall_detects_stall_and_computes_ttra():
+    # Customer finishes at 2.0s.
+    # Agent acknowledges with short filler "Let me check that": 2.3s to 3.0s (dur 0.7s <= 1.2s)
+    # Agent stalls for 1.8s (silent from 3.0s to 4.8s >= 0.8s stall gap)
+    # Agent delivers real answer: 4.8s to 8.0s
+    r = run([("customer", 0.5, 2.0), ("agent", 2.3, 3.0), ("agent", 4.8, 8.0)])
+    assert len(r.responses) == 1
+    assert r.responses[0] == pytest.approx(0.3, abs=0.06)          # TTA (Time-to-Acknowledge)
+    assert r.filler_stalls == 1
+    assert len(r.stalls) == 1
+    filler_end, answer_start, stall_dur, ttra = r.stalls[0]
+    assert stall_dur == pytest.approx(1.8, abs=0.1)
+    assert ttra == pytest.approx(2.8, abs=0.1)                     # 4.8 - 2.0 = 2.8s TTRA
+    assert r.real_responses[0] == pytest.approx(2.8, abs=0.1)
+    assert r.pct_ttra(50) == pytest.approx(2.8, abs=0.1)
+    assert "filler_stall" in kinds(r)
+
+
+def test_long_initial_burst_is_not_treated_as_a_filler_stall():
+    # Agent starts with a full 2.5s answer (> 1.2s filler_burst), then pauses 1.0s, then continues
+    r = run([("customer", 0.5, 2.0), ("agent", 2.4, 4.9), ("agent", 5.9, 8.0)])
+    assert r.filler_stalls == 0
+    assert r.responses[0] == pytest.approx(0.4, abs=0.06)
+    assert r.real_responses[0] == pytest.approx(0.4, abs=0.06)
+
+
+def test_short_pause_below_stall_gap_is_not_a_filler_stall():
+    # Agent acknowledges (0.6s), but pause is only 0.4s (< 0.8s stall_gap)
+    # 0.4s pause < UTTER_GAP_S (0.5s), so it gets merged into a single continuous utterance
+    r = run([("customer", 0.5, 2.0), ("agent", 2.3, 2.9), ("agent", 3.3, 6.0)])
+    assert r.filler_stalls == 0
+    assert len(r.responses) == 1
+
+
+def test_custom_stall_gap_and_filler_burst_thresholds():
+    # Custom: stall_gap=1.5s, filler_burst=0.5s
+    # Agent burst is 0.8s (exceeds custom filler_burst of 0.5s)
+    x = make_call([("customer", 0.5, 2.0), ("agent", 2.3, 3.1), ("agent", 5.0, 8.0)])
+    r = analyse(x[:, 0], x[:, 1], SR, stall_gap=1.5, filler_burst=0.5)
+    assert r.filler_stalls == 0  # burst of 0.8s not treated as filler under custom 0.5s limit
+
+    # Under standard defaults (filler_burst=1.2s, stall_gap=0.8s), it IS a stall:
+    r_default = analyse(x[:, 0], x[:, 1], SR)
+    assert r_default.filler_stalls == 1
+
+
+def test_filler_stall_is_reflected_in_reports_and_json(tmp_path):
+    from turnscope.report import text, to_dict, write_json, write_csv
+    r = run([("customer", 0.5, 2.0), ("agent", 2.3, 3.0), ("agent", 4.8, 8.0)])
+    txt = text(r)
+    assert "intra-turn filler stalls: 1 time(s)" in txt
+    assert "time-to-real-answer (TTRA)" in txt
+
+    d = to_dict(r)
+    assert d["filler_stalls"] == 1
+    assert len(d["stalls"]) == 1
+    assert d["median_ttra_s"] == pytest.approx(2.8, abs=0.1)
+
+    jp = tmp_path / "out.json"
+    write_json(jp, [r])
+    with open(jp) as f:
+        loaded = json.load(f)
+    assert loaded[0]["filler_stalls"] == 1
+
+    cp = tmp_path / "out.csv"
+    write_csv(cp, [r])
+    with open(cp) as f:
+        rows = list(csv.reader(f))
+    assert "filler_stalls" in rows[0]
+    assert rows[1][rows[0].index("filler_stalls")] == "1"
+
